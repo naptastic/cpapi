@@ -20,12 +20,24 @@ use Data::Dumper;
 $JSON::pretty = 1;
 
 my $username = 'root';
-my $host     = 'http://localhost';
+my $hostname = 'localhost';
+my $protocol = 'http';
+my $password = '';
+# TODO: This cannot currently be overridden.
+my $accesshash = '/root/.accesshash';
+# Port will be determined from the call type.
 my $port;
+
+GetOptions(
+    'username' => \$username,
+#    Not until we have HTTPS working
+#    'hostname' => \$hostname,
+    'protocol' => \$protocol,
+    'password' => \$password,
+)
 
 # Your access hash needs to be stored in /root/.accesshash. Eventually, this
 # should become ~/.accesshash, but we don't have access hashes for users yet.
-my $accesshash;
 
 # Restricting scope for our filehandle, read in our access hash.
 {
@@ -65,33 +77,28 @@ print $json . "\n";
 # Expects the part of @ARGV that represents which API call we are making.
 # Something with names separated by ::
 # Returns the URL of the API call itself, minus arguments / parameters.
-sub process_call {
+sub process_call_name {
     my ($call) = @_;
-    my @call_parts = split '::', $call;
-    if ( $call_parts[0] eq 'UAPI' ) {
+    my @call_parts = map { lcase $_ } split '::', $call;
+    if ( $call_parts[0] eq 'uapi' ) {
+        # TODO: This can go a few different ways:
+        # 1. I am root, and providing a username: Create a user session.
+        # 2. I provide a username and password: Use them.
+        # 3. Insufficient authentication information: Die with a useful error message.
         create_session('nappy');
-
     }
-    elsif ( $call_parts[0] eq 'WHM0' ) {
-
-        # WHM API0 call. Implement last.
+    elsif ( $call_parts[0] eq 'whm0' ) {
         die "WHM API0 calls are not implemented yet (and will be implemented last). Thanks for playing!\n";
         $port = '2086';
     }
-    elsif ( $call_parts[0] eq 'WHM1' ) {
-
-        # WHM API1 call.
-        return "${host}:2086/json-api/$call_parts[1]?api.version=1";
+    elsif ( $call_parts[0] eq 'whm1' ) {
+        return "${hostname}:2086/json-api/$call_parts[1]?api.version=1";
     }
-    elsif ( $call_parts[0] eq 'API1' ) {
-
-        # cPanel API1 call
+    elsif ( $call_parts[0] eq 'whm1' ) {
         die "cPanel API1 calls are not implemented yet.\n";
         $port = '2082';
     }
-    elsif ( $call_parts[0] eq 'API2' ) {
-
-        # cPanel API2 call
+    elsif ( $call_parts[0] eq 'whm2' ) {
         die "cPanel API2 calls are not implemented yet.\n";
         $port = '2082';
     }
@@ -184,7 +191,7 @@ sub get_security_token {
     $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
     my $request  = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
-    my $response = $useragent->post( "${host}:2086" . $request, );
+    my $response = $useragent->post( "${hostname}:2086" . $request, );
 
     my $decoded_content = decode_json( $response->decoded_content );
     my $session_url     = $decoded_content->{'data'}->{'url'};
