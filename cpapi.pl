@@ -27,10 +27,13 @@ my $password        = '';
 my $accesshash_name = '/root/.accesshash';
 
 my $call_name;
-my @call_options;
+my @call_params;
 
 # Port will be determined from the call type.
 my $port;
+my $api_class;
+my $module;
+my $function;
 
 GetOptions(
     'username=s'   => \$username,
@@ -44,10 +47,10 @@ GetOptions(
 sub process_non_option {
     my ( $opt_name, $opt_value ) = @_;
     if ( $opt_name =~ /::/ ) {
-        $call_name = process_call_name($opt_name);
+        ( $port, $api_class, $module, $function ) = process_call_name($opt_name);
     }
     elsif ( $opt_name =~ /=/ ) {
-        push @call_options, process_parameter($opt_name);
+        push @call_params, process_parameter($opt_name);
     }
     else {
         print "Non-option name is $opt_name and value is $opt_value\n";
@@ -56,11 +59,19 @@ sub process_non_option {
 
 my $accesshash = read_access_hash($accesshash_name);
 
-my $url_no_args = assemble_url_noargs(
-    'protocol' => $protocol,
-    'hostname' => $hostname,
-    'api_class' => '',
+
+my $url = assemble_url(
+    'protocol'   => $protocol,
+    'hostname'   => $hostname,
+    'api_class'  => $api_class,
+    'module'     => $module,
+    'function'   => $function,
+    'username'   => $username,
+    'params_ref' => \@call_params,
 );
+
+print $url;
+
 # my $useragent = LWP::UserAgent->new();
 # $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
@@ -68,38 +79,40 @@ my $url_no_args = assemble_url_noargs(
 
 # Expects the part of @ARGV that represents which API call we are making.
 # Something with names separated by ::
-# Returns API class, module, and function name. 
+# Returns port, API class, module, and function name.
 sub process_call_name {
     my ($call) = @_;
-    my @call_parts = map { lc $_ } split '::', $call;
+    my @call_parts = map { lc } split '::', $call;
+    my $port;
     my $api_class;
     my $module;
     my $function;
     if ( $call_parts[0] eq 'uapi' ) {
+        $port      = '2082';
         $api_class = unshift @call_parts;
-        $function = pop @call_parts;
-        $module = join('', @call_parts);
+        $function  = pop @call_parts;
+        $module    = join( '', @call_parts );
     }
     elsif ( $call_parts[0] eq 'whm0' ) {
         $port = '2086';
-        ($api_class, $module, $function) = @call_parts;
+        ( $api_class, $module, $function ) = @call_parts;
     }
     elsif ( $call_parts[0] eq 'whm1' ) {
         $port = '2086';
-        ($api_class, $module, $function) = @call_parts;
+        ( $api_class, $module, $function ) = @call_parts;
     }
     elsif ( $call_parts[0] eq 'api1' ) {
         $port = '2082';
-        ($api_class, $module, $function) = @call_parts;
+        ( $api_class, $module, $function ) = @call_parts;
     }
     elsif ( $call_parts[0] eq 'api2' ) {
         $port = '2082';
-        ($api_class, $module, $function) = @call_parts;
+        ( $api_class, $module, $function ) = @call_parts;
     }
     else {
         die 'API version is not clear. Use UAPI, API1, API2, WHM0, or WHM1.';
     }
-    return ($api_class, $module, $function);
+    return ( $port, $api_class, $module, $function );
 }
 
 # Expects a list of parameters that were passed to the program.
@@ -123,41 +136,38 @@ sub process_parameter {
 }
 
 # Expects a hash of arguments. {
-#   'protocol' => defaults to http (and really shouldn't be changed right now)
-#   'hostname' => defaults to localhost (ditto)
-#   'api_class' => one of uapi, api1, api2, whm0, or whm1
-#   'module' => the module within which the function you want resides
-#   'function' => the function you want to call
-#   'username' => for api1 and api2 calls, a username needs to be specified.
+#   'protocol'      => defaults to http (and really shouldn't be changed right now)
+#   'hostname'      => defaults to localhost (ditto)
+#   'api_class'     => one of uapi, api1, api2, whm0, or whm1
+#   'module'        => the module within which the function you want resides
+#   'function'      => the function you want to call
+#   'username'      => for api1 and api2 calls, a username needs to be specified
+#   'params_ref'    => an array of arguments to the API call.
 # }
 # Returns the URL of the API call, not including arguments to that call.
-sub assemble_url_noargs {
+sub assemble_url {
     my (%args) = @_;
     $args{'protocol'} ||= 'http';
     $args{'hostname'} ||= 'localhost';
     my $url;
     my %parts = {
-        'protocol' => $args{'protocol'},
-        'hostname' => $args{'hostname'},
-        'port'     => whatis_port( $args{'api_class'} ),
-        'json-api' => is_jsonapi( $args{'api_class'} ),
-        'security_token' =>
-          get_security_token( $args{'api_class'}, $args{'username'} ),
-        'execute' => is_execute( $args{'api_class'} ),
-        'cpanel'  => is_cpanel( $args{'api_class'} ),
-        'user' => get_cpanel_userarg( $args{'api_class'}, $args{'username'} ),
-        'cpanel_jsonapi_module' =>
-          is_cpanel_jsonapi_module( $args{'api_class'} ),
-        'module'              => $args{'module'},
-        'cpanel_jsonapi_func' => is_cpanel_jsonapi_func( $args{'api_class'} ),
-        'func'                => $args{'func'},
-        'api_version'         => api_version( $args{'api_class'} ),
+        'protocol'              => $args{'protocol'},
+        'hostname'              => $args{'hostname'},
+        'port'                  => whatis_port( $args{'api_class'} ),
+        'json-api'              => is_jsonapi( $args{'api_class'} ),
+        'security_token'        => get_security_token( $args{'api_class'}, $args{'username'} ),
+        'execute'               => is_execute( $args{'api_class'} ),
+        'cpanel'                => is_cpanel( $args{'api_class'} ),
+        'user'                  => get_cpanel_userarg( $args{'api_class'}, $args{'username'} ),
+        'cpanel_jsonapi_module' => is_cpanel_jsonapi_module( $args{'api_class'} ),
+        'module'                => $args{'module'},
+        'cpanel_jsonapi_func'   => is_cpanel_jsonapi_func( $args{'api_class'} ),
+        'func'                  => $args{'func'},
+        'api_version'           => api_version( $args{'api_class'} ),
     };
     $url = "$parts{'protocol'}://$parts{'hostname'}:$parts{'port'}";
-    $url .= join '',
-      @args{
-        qw/ json-api security_token executecpanel user cpanel_jsonapi_module module cpanel_jsonapi_func func api_version /
-      };
+    $url .= join '', @args{qw/ json-api security_token executecpanel user cpanel_jsonapi_module module cpanel_jsonapi_func func api_version /};
+    $url .= '?' . join '&', @{$args{'params_ref'}};
 
     return $url;
 }
@@ -209,14 +219,13 @@ sub get_security_token {
     );
     $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
-    my $request =
-"/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
+    my $request  = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
     my $response = $useragent->post( "${hostname}:2086" . $request, );
 
     my $decoded_content = decode_json( $response->decoded_content );
     my $session_url     = $decoded_content->{'data'}->{'url'};
 
-# LWP will bomb out with a certificate problem if we use HTTPS, so we have to use plain HTTP.
+    # LWP will bomb out with a certificate problem if we use HTTPS, so we have to use plain HTTP.
     $session_url =~ s/https:/http:/;
     $session_url =~ s/:2083/:2082/;
 
