@@ -1,0 +1,75 @@
+Generalized API call structure looks like:
+
+{
+	'protocol' => 'http',
+	'hostname' => 'localhost',
+	'port' => '',
+		# 2082 for cPanel and UAPIs
+		# 2086 for WHM APIs
+	'json-api' => '',
+		# 'json-api' for cPanel APIs
+		# '' or undef for WHM APIs and UAPI
+	'security_token' => '',
+		# 'cpsess1234567890' for UAPI
+		# '' or undef for all else
+	'execute' => '',
+		# 'execute' for UAPI
+		# '' or undef for all else
+	'cpanel' => '',
+		# 'cpanel?' for cPanel APIs
+		# '' or undef for all else
+	'user' => '',
+		# 'user=$username' for cPanel APIs
+		# '' or undef for all else
+	'cpanel_jsonapi_module' => '',
+		#
+============
+
+WHM0:
+$protocol = http
+$port = 2086
+${protocol}://${hostname}:${port}/json-api/${func}?api.version=0
+    &arg=value
+    &arg=value
+    &arg=value
+
+WHM1:
+$protocol = http
+$port = 2086
+${protocol}://${hostname}:${port}/json-api/${func}?api.version=1
+    &arg=value
+    &arg=value
+    &arg=value
+
+===== I might be wrong about the security tokens for API1 and API2.
+===== We might _have_ to authenticate with a password, or as root
+===== with a username.
+API1:
+$protocol = http
+$port = 2082
+${protocol}://${hostname}:${port}/json-api/cpanel?user=username
+    &cpanel_jsonapi_module=${module}
+    &cpanel_jsonapi_func=${func}
+    &cpanel_jsonapi_version=1
+    &arg-0=value
+    &arg-1=value
+    &arg-2=value
+
+API2:
+$protocol = http
+$port = 2082
+${protocol}://${hostname}:${port}/json-api/cpanel?user=username
+    &cpanel_jsonapi_module=${module}
+    &cpanel_jsonapi_func=${func}
+    &cpanel_jsonapi_version=2
+    &arg=value
+    &arg=value
+
+UAPI:
+$protocol = http
+$port = 2082
+${protocol}://${hostname}:${port}/${security_token}/execute/
+    ${module}/${func}?
+    &arg=val
+    &arg=val
+
