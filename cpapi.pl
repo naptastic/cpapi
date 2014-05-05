@@ -44,18 +44,6 @@ GetOptions(
     '<>'           => \&process_non_option,
 );
 
-sub process_non_option {
-    my ( $opt_name, $opt_value ) = @_;
-    if ( $opt_name =~ /::/ ) {
-        ( $port, $api_class, $module, $function ) = process_call_name($opt_name);
-    }
-    elsif ( $opt_name =~ /=/ ) {
-        push @call_params, process_parameter($opt_name);
-    }
-    else {
-        print "Non-option name is $opt_name and value is $opt_value\n";
-    }
-}
 
 my $accesshash = read_access_hash($accesshash_name);
 
@@ -77,11 +65,28 @@ print $url;
 
 # ##################################################################################################################
 
+# Expects something that Getopt::Long doesn't know how to handle.
+# Returns 1.
+sub process_non_option {
+    my ( $opt_name, $opt_value ) = @_;
+    if ( $opt_name =~ /::/ ) {
+        ( $port, $api_class, $module, $function ) = process_call_name($opt_name);
+    }
+    elsif ( $opt_name =~ /=/ ) {
+        push @call_params, process_parameter($opt_name);
+    }
+    else {
+        print "Non-option name is $opt_name and value is $opt_value\n";
+    }
+    return 1;
+}
+
 # Expects the part of @ARGV that represents which API call we are making.
 # Something with names separated by ::
 # Returns port, API class, module, and function name.
 sub process_call_name {
     my ($call) = @_;
+    print "process_call_name is processing the string $call\n";
     my @call_parts = map { lc } split '::', $call;
     my $port;
     my $api_class;
@@ -89,7 +94,7 @@ sub process_call_name {
     my $function;
     if ( $call_parts[0] eq 'uapi' ) {
         $port      = '2082';
-        $api_class = unshift @call_parts;
+        $api_class = shift @call_parts;
         $function  = pop @call_parts;
         $module    = join( '', @call_parts );
     }
@@ -147,10 +152,11 @@ sub process_parameter {
 # Returns the URL of the API call, not including arguments to that call.
 sub assemble_url {
     my (%args) = @_;
-    $args{'protocol'} ||= 'http';
-    $args{'hostname'} ||= 'localhost';
-    my $url;
-    my %parts = {
+    foreach (sort keys %args) {
+        print "\%args Key: $_ Value: $args{$_}\n";
+    }
+
+    my %parts = (
         'protocol'              => $args{'protocol'},
         'hostname'              => $args{'hostname'},
         'port'                  => whatis_port( $args{'api_class'} ),
@@ -164,7 +170,15 @@ sub assemble_url {
         'cpanel_jsonapi_func'   => is_cpanel_jsonapi_func( $args{'api_class'} ),
         'func'                  => $args{'func'},
         'api_version'           => api_version( $args{'api_class'} ),
-    };
+    );
+
+    print sort keys %parts;
+
+    foreach (sort keys %parts) {
+        print "\%parts Key: $_ Value: $parts{$_}\n";
+    }
+
+    my $url;
     $url = "$parts{'protocol'}://$parts{'hostname'}:$parts{'port'}";
     $url .= join '', @args{qw/ json-api security_token executecpanel user cpanel_jsonapi_module module cpanel_jsonapi_func func api_version /};
     $url .= '?' . join '&', @{$args{'params_ref'}};
