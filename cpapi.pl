@@ -1,5 +1,5 @@
 #!/usr/local/cpanel/3rdparty/bin/perl
-# cpanel - cpapi.pl             Copyright(c) 2013 cPanel, Inc.
+# cpanel - cpapi.pl             Copyright(c) 2014 cPanel, Inc.
 #                                                           All rights Reserved.
 # copyright@cpanel.net                                         http://cpanel.net
 # This code is subject to the cPanel license. Unauthorized copying is prohibited
@@ -47,7 +47,6 @@ GetOptions(
 
 my $accesshash = read_access_hash($accesshash_name);
 
-
 my $url = assemble_url(
     'protocol'   => $protocol,
     'hostname'   => $hostname,
@@ -63,7 +62,7 @@ print $url;
 # my $useragent = LWP::UserAgent->new();
 # $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
-# ##################################################################################################################
+##################################################################################################################
 
 # Expects something that Getopt::Long doesn't know how to handle.
 # Returns 1.
@@ -76,7 +75,7 @@ sub process_non_option {
         push @call_params, process_parameter($opt_name);
     }
     else {
-        print "Non-option name is $opt_name and value is $opt_value\n";
+        print "I don't understand $opt_name. I'm ignoring it.";
     }
     return 1;
 }
@@ -88,29 +87,18 @@ sub process_call_name {
     my ($call) = @_;
     print "process_call_name is processing the string $call\n";
     my @call_parts = map { lc } split '::', $call;
-    my $port;
-    my $api_class;
-    my $module;
-    my $function;
+    my ($port, $api_class, $module, $function);
     if ( $call_parts[0] eq 'uapi' ) {
         $port      = '2082';
         $api_class = shift @call_parts;
         $function  = pop @call_parts;
         $module    = join( '', @call_parts );
     }
-    elsif ( $call_parts[0] eq 'whm0' ) {
+    elsif ( $call_parts[0] =~ /^whm[0-1]$/ ) {
         $port = '2086';
         ( $api_class, $module, $function ) = @call_parts;
     }
-    elsif ( $call_parts[0] eq 'whm1' ) {
-        $port = '2086';
-        ( $api_class, $module, $function ) = @call_parts;
-    }
-    elsif ( $call_parts[0] eq 'api1' ) {
-        $port = '2082';
-        ( $api_class, $module, $function ) = @call_parts;
-    }
-    elsif ( $call_parts[0] eq 'api2' ) {
+    elsif ( $call_parts[0] =~ /^api[0-1]$/ ) {
         $port = '2082';
         ( $api_class, $module, $function ) = @call_parts;
     }
