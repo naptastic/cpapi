@@ -30,17 +30,17 @@ my $accesshash_name = '/root/.accesshash';
 my $call_name;
 my @call_params;
 
-# Port will be determined from the call type.
-my $port;
 my $api_class;
 my $module;
 my $function;
 
+my $uapi_regex       = qr/^uapi$/;
+my $whm_api_regex    = qr/^whm[01]$/;
+my $cpanel_api_regex = qr/^api[12]$/;
+
 GetOptions(
-    'username=s'   => \$username,
-    'u=s'          => \$username,
-    'password'     => \$password,
-    'p'            => \$password,
+    'username|u=s' => \$username,
+    'password|p'   => \$password,
     'accesshash=s' => \$accesshash_name,
     '<>'           => \&process_non_option,
 );
@@ -67,7 +67,7 @@ my $url = assemble_url(
 sub process_non_option {
     my ( $opt_name, $opt_value ) = @_;
     if ( $opt_name =~ /::/ ) {
-        ( $port, $api_class, $module, $function ) = process_call_name($opt_name);
+        ( $api_class, $module, $function ) = process_call_name($opt_name);
     }
     elsif ( $opt_name =~ /=/ ) {
         push @call_params, process_parameter($opt_name);
@@ -80,36 +80,30 @@ sub process_non_option {
 
 # Expects the part of @ARGV that represents which API call we are making.
 # Something with names separated by ::
-# Returns port, API class, module, and function name.
+# Returns API class, module, and function name.
 sub process_call_name {
     my ($call) = @_;
     my @call_parts = map { lc } split '::', $call;
-    my ( $port, $api_class, $module, $function );
-    if ( $call_parts[0] eq 'uapi' ) {
-        $port      = '2082';
+    my ( $api_class, $module, $function );
+    if ( $call_parts[0] =~ $uapi_regex ) {
         $api_class = shift @call_parts;
         $function  = pop @call_parts;
-        $module    = join( '/', @call_parts ) . '/';
+        $module    = join( '/', @call_parts, '' );
     }
-    elsif ( $call_parts[0] =~ /^whm[0-1]$/ ) {
-        $port = '2086';
-        ( $api_class, $module, $function ) = @call_parts;
-    }
-    elsif ( $call_parts[0] =~ /^api[0-1]$/ ) {
-        $port = '2082';
+    elsif ( $call_parts[0] =~ $whm_api_regex || $call_parts[0] =~ $cpanel_api_regex ) {
         ( $api_class, $module, $function ) = @call_parts;
     }
     else {
         die 'API version is not clear. Use UAPI, API1, API2, WHM0, or WHM1.';
     }
-    return ( $port, $api_class, $module, $function );
+    return ( $api_class, $module, $function );
 }
 
 # Expects one parameter passed to the program. Where appropriate, prompts
 # for the value, then returns a parameter that can go into the URL.
 sub process_parameter {
     my ($arg) = @_;
-    if ( $arg =~ /([^=]+)=(.*)/ ) {
+    if ( $arg =~ /^[^=]+=[^=]+$/ ) {
         return $arg;
     }
     elsif ( $arg =~ /^=/ ) {
@@ -182,14 +176,14 @@ sub read_access_hash {
 # Returns the appropriate port to use for this call.
 sub whatis_port {
     my ($api_class) = @_;
-    return $api_class =~ /^whm.$/ ? 2086 : 2082;
+    return $api_class =~ $whm_api_regex ? 2086 : 2082;
 }
 
 # Expects an API version in ( whm0, whm1, api1, api2, uapi )
 # json-api will be part of the assembled URL, except for UAPI calls.
 sub is_jsonapi {
     my ($api_class) = @_;
-    return $api_class eq 'uapi' ? '' : '/json-api/';
+    return $api_class =~ $uapi_regex ? '' : '/json-api/';
 }
 
 # Expects an API version and valid cPanel username.
@@ -199,7 +193,7 @@ sub is_jsonapi {
 # don't exist.
 sub get_security_token {
     my ( $api_class, $cpanel_username ) = @_;
-    return '' unless $api_class eq 'uapi';
+    return '' unless $api_class =~ $uapi_regex;
 
     if ( !$cpanel_username ) {
         die "get_security_token did not receive a username argument. This should never happen.";
@@ -235,27 +229,27 @@ sub get_security_token {
 # return a string if it needs to be in the URL, or empty otherwise.
 sub is_execute {
     my ($api_class) = @_;
-    return $api_class eq 'uapi' ? 'execute/' : '';
+    return $api_class =~ $uapi_regex ? 'execute/' : '';
 }
 
 sub is_cpanel {
     my ($api_class) = @_;
-    return $api_class =~ /^api.$/ ? 'cpanel?' : '';
+    return $api_class =~ $cpanel_api_regex ? 'cpanel?' : '';
 }
 
 sub get_cpanel_userarg {
     my ( $api_class, $username ) = @_;
-    return $api_class =~ /^api.$/ ? "user=$username" : '';
+    return $api_class =~ $cpanel_api_regex ? "user=$username" : '';
 }
 
 sub is_cpanel_jsonapi_module {
     my ($api_class) = @_;
-    return $api_class =~ /^api.$/ ? '&cpanel_jsonapi_module=' : '';
+    return $api_class =~ $cpanel_api_regex ? '&cpanel_jsonapi_module=' : '';
 }
 
 sub is_cpanel_jsonapi_func {
     my ($api_class) = @_;
-    return $api_class =~ /^api.$/ ? '&cpanel_jsonapi_func=' : '';
+    return $api_class =~ $cpanel_api_regex ? '&cpanel_jsonapi_func=' : '';
 }
 
 sub api_version {
