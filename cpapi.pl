@@ -20,6 +20,7 @@ $JSON::pretty = 1;
 
 use Getopt::Long;
 
+# TODO: Most or all of these globals should go away.
 my $username        = 'root';
 my $hostname        = 'localhost';
 my $protocol        = 'http';
@@ -44,7 +45,6 @@ GetOptions(
     '<>'           => \&process_non_option,
 );
 
-
 my $accesshash = read_access_hash($accesshash_name);
 
 my $url = assemble_url(
@@ -56,8 +56,6 @@ my $url = assemble_url(
     'username'   => $username,
     'params_ref' => \@call_params,
 );
-
-print $url;
 
 # my $useragent = LWP::UserAgent->new();
 # $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
@@ -85,14 +83,13 @@ sub process_non_option {
 # Returns port, API class, module, and function name.
 sub process_call_name {
     my ($call) = @_;
-    print "process_call_name is processing the string $call\n";
     my @call_parts = map { lc } split '::', $call;
-    my ($port, $api_class, $module, $function);
+    my ( $port, $api_class, $module, $function );
     if ( $call_parts[0] eq 'uapi' ) {
         $port      = '2082';
         $api_class = shift @call_parts;
         $function  = pop @call_parts;
-        $module    = join( '', @call_parts );
+        $module    = join( '/', @call_parts ) . '/';
     }
     elsif ( $call_parts[0] =~ /^whm[0-1]$/ ) {
         $port = '2086';
@@ -108,9 +105,8 @@ sub process_call_name {
     return ( $port, $api_class, $module, $function );
 }
 
-# Expects a list of parameters that were passed to the program.
-# It only handles parameters for the API call. It will not handle
-# call names or other possibilities.
+# Expects one parameter passed to the program. Where appropriate, prompts
+# for the value, then returns a parameter that can go into the URL.
 sub process_parameter {
     my ($arg) = @_;
     if ( $arg =~ /([^=]+)=(.*)/ ) {
@@ -139,10 +135,7 @@ sub process_parameter {
 # }
 # Returns the URL of the API call, not including arguments to that call.
 sub assemble_url {
-    my (%args) = @_;
-    foreach (sort keys %args) {
-        print "\%args Key: $_ Value: $args{$_}\n";
-    }
+    my %args = @_;
 
     my %parts = (
         'protocol'              => $args{'protocol'},
@@ -156,21 +149,16 @@ sub assemble_url {
         'cpanel_jsonapi_module' => is_cpanel_jsonapi_module( $args{'api_class'} ),
         'module'                => $args{'module'},
         'cpanel_jsonapi_func'   => is_cpanel_jsonapi_func( $args{'api_class'} ),
-        'func'                  => $args{'func'},
+        'function'              => $args{'function'},
         'api_version'           => api_version( $args{'api_class'} ),
     );
 
-    print sort keys %parts;
-
-    foreach (sort keys %parts) {
-        print "\%parts Key: $_ Value: $parts{$_}\n";
-    }
-
     my $url;
     $url = "$parts{'protocol'}://$parts{'hostname'}:$parts{'port'}";
-    $url .= join '', @args{qw/ json-api security_token executecpanel user cpanel_jsonapi_module module cpanel_jsonapi_func func api_version /};
-    $url .= '?' . join '&', @{$args{'params_ref'}};
+    $url .= join '', @parts{qw/ json-api security_token execute cpanel user cpanel_jsonapi_module module cpanel_jsonapi_func function api_version /};
+    $url .= '?' . join '&', @{ $args{'params_ref'} };
 
+    print "$url\n";
     return $url;
 }
 
@@ -180,8 +168,8 @@ sub read_access_hash {
     my $accesshash;
 
     # TODO: This is probably the wrong thing to do.
-    return '' unless -e $accesshash_name;
-    open my $accesshash_fh, '<', $accesshash_name or return '';
+    return undef unless -e $accesshash_name;
+    open my $accesshash_fh, '<', $accesshash_name or return undef;
     while (<$accesshash_fh>) {
         chomp;
         $accesshash .= $_;
@@ -213,16 +201,23 @@ sub get_security_token {
     my ( $api_class, $cpanel_username ) = @_;
     return '' unless $api_class eq 'uapi';
 
-    # TODO: Maybe access hash is bad. Gotta deal with that.
+    if ( !$cpanel_username ) {
+        die "get_security_token did not receive a username argument. This should never happen.";
+    }
+    if ( $cpanel_username eq 'root' ) {
+        die "UAPI calls require a -u argument. They can't run as root.\n";
+    }
 
+    # TODO: Maybe access hash is bad. Gotta deal with that.
     my $useragent = LWP::UserAgent->new(
         cookie_jar            => HTTP::Cookies->new,
         requests_redirectable => []
     );
     $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
-    my $request  = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
-    my $response = $useragent->post( "${hostname}:2086" . $request, );
+    my $request = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
+
+    my $response = $useragent->post( "http://${hostname}:2086" . $request, );
 
     my $decoded_content = decode_json( $response->decoded_content );
     my $session_url     = $decoded_content->{'data'}->{'url'};
