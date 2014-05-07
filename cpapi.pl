@@ -47,6 +47,11 @@ GetOptions(
 
 my $accesshash = read_access_hash($accesshash_name);
 
+my $useragent = LWP::UserAgent->new(
+    cookie_jar            => HTTP::Cookies->new,
+    requests_redirectable => [ 'GET', 'HEAD' ],
+);  
+
 my $url = assemble_url(
     'protocol'   => $protocol,
     'hostname'   => $hostname,
@@ -57,8 +62,12 @@ my $url = assemble_url(
     'params_ref' => \@call_params,
 );
 
-# my $useragent = LWP::UserAgent->new();
-# $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
+print "$url\n";
+
+my $response = $useragent->get( $url );
+my $json = JSON->new->allow_nonref;
+
+print  $json->pretty->encode( decode_json( $response->decoded_content ) );
 
 ##################################################################################################################
 
@@ -83,7 +92,8 @@ sub process_non_option {
 # Returns API class, module, and function name.
 sub process_call_name {
     my ($call) = @_;
-    my @call_parts = map { lc } split '::', $call;
+    my @call_parts = split '::', $call;
+    $call_parts[0] = lc $call_parts[0];
     my ( $api_class, $module, $function );
     if ( $call_parts[0] =~ $uapi_regex ) {
         $api_class = shift @call_parts;
@@ -150,9 +160,8 @@ sub assemble_url {
     my $url;
     $url = "$parts{'protocol'}://$parts{'hostname'}:$parts{'port'}";
     $url .= join '', @parts{qw/ json-api security_token execute cpanel user cpanel_jsonapi_module module cpanel_jsonapi_func function api_version /};
-    $url .= '?' . join '&', @{ $args{'params_ref'} };
+    $url .= join '&', @{ $args{'params_ref'} };
 
-    print "$url\n";
     return $url;
 }
 
@@ -203,25 +212,31 @@ sub get_security_token {
     }
 
     # TODO: Maybe access hash is bad. Gotta deal with that.
-    my $useragent = LWP::UserAgent->new(
+    my $localuseragent = LWP::UserAgent->new(
         cookie_jar            => HTTP::Cookies->new,
         requests_redirectable => []
     );
-    $useragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
+    $localuseragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
     my $request = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
-
-    my $response = $useragent->post( "http://${hostname}:2086" . $request, );
+    my $response = $localuseragent->post( "http://${hostname}:2086" . $request, );
 
     my $decoded_content = decode_json( $response->decoded_content );
+#    print "DECODED JSON FOLLOWS:\n\n\n$decoded_content\n\n\n";
     my $session_url     = $decoded_content->{'data'}->{'url'};
+#    print "Session url is $session_url\n";
 
     # LWP will bomb out with a certificate problem if we use HTTPS, so we have to use plain HTTP.
     $session_url =~ s/https:/http:/;
     $session_url =~ s/:2083/:2082/;
 
+#    print "insecure session url is $session_url\n";
+    my ($security_token) = $session_url =~ m{(cpsess[^/]+)};
+#    print "security token is $security_token\n\n\n";
+
     $response = $useragent->get($session_url);
-    my ($security_token) = $response->header('refresh') =~ m{(cpsess[^/]+)};
+    # global $useragent now has the cookie and redirect to be able to make UAPI calls as the user.
+
     return "/$security_token/";
 }
 
@@ -254,12 +269,12 @@ sub is_cpanel_jsonapi_func {
 
 sub api_version {
     my ($api_class) = @_;
-    my %results = {
-        'whm0' => '?api.version=0',
-        'whm1' => '?api.version=1',
-        'api1' => '&cpanel_jsonapi_version=1',
-        'api2' => '&cpanel_jsonapi_version=2',
-        'uapi' => '',
-    };
+    my %results = (
+        'whm0' => '?api.version=0&',
+        'whm1' => '?api.version=1&',
+        'api1' => '&cpanel_jsonapi_version=1&',
+        'api2' => '&cpanel_jsonapi_version=2&',
+        'uapi' => '?'
+    );
     return $results{$api_class};
 }
