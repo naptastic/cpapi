@@ -13,6 +13,7 @@ use LWP::UserAgent;
 use HTTP::Cookies;
 use IO::Prompt;
 use Data::Dumper;
+use Encode qw( encode_utf8 );
 use utf8;
 
 # Presented output should be presentable.
@@ -69,7 +70,7 @@ my $response = $useragent->get($url);
 my $json     = JSON->new->allow_nonref;
 
 print $response->decoded_content . "\n\n\n";
-print $json->pretty->encode( decode_json( $response->decoded_content ) );
+print $json->pretty->encode( decode_json( encode_utf8( $response->decoded_content ) ) );
 
 ##################################################################################################################
 
