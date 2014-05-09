@@ -50,6 +50,7 @@ GetOptions(
         $password = prompt( "Password: ", -e => "*" );
         return 1;
     },
+    'help|h'         => \&help,
     'debug|d'        => \$debug,
     'accesshash|a=s' => \$accesshash_name,
     '<>'             => \&process_non_option,
@@ -375,4 +376,64 @@ sub api_version {
         'uapi' => '?'
     );
     return $results{$api_class};
+}
+
+sub help {
+
+    my $help = <<END;
+USAGE:
+    cpapi [options] API::Module::function argument=value
+
+OPTIONS:
+    -h, -help           Show this screen.
+
+    -u, -username       Specify user on whose behalf you're making the call.
+                        Necessary for UAPI, API1, and API2.
+                        
+    -p, -password       Prompt for password. We will ignore the password if
+                        you try to pass it as an argument.
+                        Doesn't currently work.
+
+    -a, -accesshash     Specify alternate location for .accesshash. Default is
+                        /root/.accesshash
+
+    -d, -debug          Debugging output. Most subroutines announce entry,
+                        and many print data that I managed to miscalculate
+                        while developing the script.
+
+THE CALL NAME:
+    The API class, module, and function name, are joined using ::. UAPI, API1,
+    API2, WHM0, and WHM1 are valid API classes.
+
+    The WHM APIs do not have namespacing, so they'll look like
+    WHM0::function_name or similar.
+
+ARGUMENTS:
+    Arguments are specified as name=value. If you provide a value name without
+    a value, cpapi will prompt you for its value; this way, you can avoid
+    putting sensitive data into your Bash history.
+
+    value= will not prompt. It will pass an empty string as the argument.
+
+EXAMPLES:
+    To change the FTP password for zoit@<david's primary domain>
+    cpapi -u david UAPI::Ftp::passwd user=foo pass=fishface
+
+    To change david's IP address to 1.2.3.4:
+    cpapi WHM1::setsiteip user=david ip=1.2.3.4
+
+    To add a 'site1' database for david to use:
+    cpapi API2::MysqlFE::createdb db=david_site1
+
+KNOWN PROBLEMS:
+    cPanel API1 calls all return "Could not find function _ in module _".
+    I don't know what's up with that.
+
+    User / Password authentication doesn't work for cPanel API1 / API2.
+    A security token is required and the security token code isn't that
+    smart yet.
+
+END
+    print $help;
+    exit;
 }
