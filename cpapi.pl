@@ -168,8 +168,9 @@ sub auth_for_whm {
     $username ||= 'root';
 
     simple_auth_via_hash( $useragent, $username, $accesshash_name )
-      or auth_via_password( $useragent, $username, $password )
+      or simple_auth_via_password( $useragent, $username, $password )
       or die "WHM-style authentication failed.\n";
+    return 1;
 }
 
 sub auth_for_cp {
@@ -197,6 +198,7 @@ sub simple_auth_via_hash {
     return 0 unless $accesshash;
     if ($debug) { print "    Access hash used for authentication.\n"; }
     $useragent->default_header( 'Authorization' => 'WHM ' . $username . ':' . $accesshash, );
+    return 1;
 }
 
 sub simple_auth_via_password {
