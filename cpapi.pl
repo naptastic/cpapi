@@ -103,11 +103,8 @@ sub process_non_option {
     if ( $opt_name =~ /::/ ) {
         ( $api_class, $module, $function ) = process_call_name($opt_name);
     }
-    elsif ( $opt_name =~ /=/ ) {
-        push @call_params, process_parameter($opt_name);
-    }
     else {
-        print "I don't understand $opt_name. I'm ignoring it.\n";
+        push @call_params, process_parameter($opt_name);
     }
     return 1;
 }
@@ -137,7 +134,7 @@ sub process_call_name {
 sub process_parameter {
     my ($arg) = @_;
     if ($debug) { print "entered process_parameter\n"; }
-    if ( $arg =~ /^[^=]+=[^=]+$/ ) {
+    if ( $arg =~ /^[^=]+=[^=]*$/ ) {
         return $arg;
     }
     elsif ( $arg =~ /^=/ ) {
@@ -147,7 +144,7 @@ sub process_parameter {
     }
     else {
         my $value;
-        $value = prompt("$arg: ");
+        $value = prompt("$arg: ", -e => '*');
         return "$arg=$value";
     }
 }
@@ -392,14 +389,29 @@ OPTIONS:
                         
     -p, -password       Prompt for password. We will ignore the password if
                         you try to pass it as an argument.
-                        Doesn't currently work.
+                        Currently only works for UAPI.
 
     -a, -accesshash     Specify alternate location for .accesshash. Default is
                         /root/.accesshash
 
-    -d, -debug          Debugging output. Most subroutines announce entry,
-                        and many print data that I managed to miscalculate
+    -d, -debug          Debugging output. Most subroutines announce entry, and
+                        many print data that I managed to miscalculate
                         while developing the script.
+
+                WARNING: Debug output has the potential to disclose
+                sensitive information you put in your call.
+
+AUTHENTICATION:
+    For WHM calls, cpapi will try to use your access hash first. If you pass
+    -p, it will prompt for your password, but still use your access hash if it
+    can.
+
+    For cPanel API calls, cpapi will use a password first if it's available.
+    Otherwise, it will use root's access hash to generate a user session, then
+    log in as the user and authenticate that way.
+
+    There is no way to use root's password to make a cPanel API or UAPI call.
+    Root's password can only authenticate for WHM API calls.
 
 THE CALL NAME:
     The API class, module, and function name, are joined using ::. UAPI, API1,
@@ -407,6 +419,9 @@ THE CALL NAME:
 
     The WHM APIs do not have namespacing, so they'll look like
     WHM0::function_name or similar.
+
+    Please consult http://documentation.cpanel.net/ for lists of functions
+    available through the five APIs.
 
 ARGUMENTS:
     Arguments are specified as name=value. If you provide a value name without
@@ -429,9 +444,9 @@ KNOWN PROBLEMS:
     cPanel API1 calls all return "Could not find function _ in module _".
     I don't know what's up with that.
 
-    User / Password authentication doesn't work for cPanel API1 / API2.
-    A security token is required and the security token code isn't that
-    smart yet.
+    User / Password authentication doesn't work for cPanel API1 / API2. A
+    security token is required and the security token code isn't that smart
+    yet.
 
 END
     print $help;
