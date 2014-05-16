@@ -368,7 +368,7 @@ sub api_version {
     my %results = (
         'whm0' => '?api.version=0&',
         'whm1' => '?api.version=1&',
-        'api1' => '&cpanel_jsonapi_version=1&',
+        'api1' => '&cpanel_jsonapi_apiversion=1&',
         'api2' => '&cpanel_jsonapi_version=2&',
         'uapi' => '?'
     );
