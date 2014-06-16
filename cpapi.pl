@@ -5,11 +5,11 @@
 # This code is subject to the cPanel license. Unauthorized copying is prohibited
 use strict;
 
-use LWP::UserAgent;
+#use LWP::UserAgent;
+use HTTP::Tiny;
 
 # Because having a certificate installed on 'localhost' is kinda dumb,
 # I'm not wasting time with HTTPS.
-# use LWP::Protocol::https;
 use HTTP::Cookies;
 use IO::Prompt;
 use Data::Dumper;
@@ -56,9 +56,8 @@ GetOptions(
     '<>'             => \&process_non_option,
 );
 
-my $useragent = LWP::UserAgent->new(
+my $useragent = HTTP::Tiny->new (
     cookie_jar            => HTTP::Cookies->new,
-    requests_redirectable => [ 'GET', 'HEAD' ],
 );
 
 # At this point, we know which API we're talking to.
@@ -88,7 +87,7 @@ if ($debug) { print "    request URL turned out to be $url\n"; }
 
 my $response = $useragent->get($url);
 my $json_printer = JSON->new->pretty;
-print $json_printer->encode( decode_json( encode_utf8( $response->decoded_content ) ) );
+print $json_printer->encode( decode_json( encode_utf8( $response->{content} ) ) );
 
 ##################################################################################################################
 #### Turning our inputs into what we can use
@@ -247,15 +246,14 @@ sub get_security_token {
     return 0 unless $accesshash;
 
     # TODO: Maybe access hash is bad. Gotta deal with that.
-    my $localuseragent = LWP::UserAgent->new(
+    my $localuseragent = HTTP::Tiny->new(
         cookie_jar            => HTTP::Cookies->new,
-        requests_redirectable => []
     );
     $localuseragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
     my $request         = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
     my $response        = $localuseragent->post( "http://${hostname}:2086" . $request, );
-    my $decoded_content = decode_json( $response->decoded_content );
+    my $decoded_content = decode_json( $response->{content} );
     my $session_url     = $decoded_content->{'data'}->{'url'};
 
     # LWP will bomb out with a certificate problem if we use HTTPS, so we have to use plain HTTP.
