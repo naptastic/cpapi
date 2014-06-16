@@ -29,7 +29,6 @@ my $protocol = 'http';
 my $password;
 my $accesshash_name = '/root/.accesshash';
 my $debug;
-my $ugly_print = 0;
 
 my $call_name;
 my @call_params;
@@ -54,7 +53,6 @@ GetOptions(
     'help|h'         => \&help,
     'debug|d'        => \$debug,
     'accesshash|a=s' => \$accesshash_name,
-    'ugly|u'         => \$ugly_print,
     '<>'             => \&process_non_option,
 );
 
@@ -90,12 +88,7 @@ if ($debug) { print "    request URL turned out to be $url\n"; }
 
 my $response = $useragent->get($url);
 my $json_printer = JSON->new->pretty;
-if ($ugly_print) {
-    print encode_utf8( $response->decoded_content ), "\n";
-}
-else {
-    print $json_printer->encode( decode_json( encode_utf8( $response->decoded_content ) ) );
-}
+print $json_printer->encode( decode_json( encode_utf8( $response->decoded_content ) ) );
 
 ##################################################################################################################
 #### Turning our inputs into what we can use
@@ -374,7 +367,7 @@ sub api_version {
     my %results = (
         'whm0' => '?api.version=0&',
         'whm1' => '?api.version=1&',
-        'api1' => '&cpanel_jsonapi_version=1&',
+        'api1' => '&cpanel_jsonapi_apiversion=1&',
         'api2' => '&cpanel_jsonapi_version=2&',
         'uapi' => '?'
     );
