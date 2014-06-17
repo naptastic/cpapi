@@ -25,7 +25,7 @@ use Getopt::Long;
 # TODO: Most or all of these globals should go away.
 my $username;
 my $hostname = 'localhost';
-my $protocol = 'http';
+my $protocol = 'https';
 my $password;
 my $accesshash_name = '/root/.accesshash';
 my $debug;
@@ -37,6 +37,8 @@ my $api_class;
 my $module;
 my $function;
 
+# This is a global that gets modified in unsavory ways. I'm really, really sorry,
+# like David Tennant telling you that you've got two shadows sorry.
 my $security_token;
 
 my $uapi_regex       = qr/^uapi$/i;
@@ -56,19 +58,17 @@ GetOptions(
     '<>'             => \&process_non_option,
 );
 
-my $useragent = HTTP::Tiny->new (
-    cookie_jar            => HTTP::Cookies->new,
-);
+my $useragent;
 
 # At this point, we know which API we're talking to.
 # We have a username and password argument.
 # We can set up authentication as necessary.
 
 if ( $api_class =~ $whm_api_regex ) {
-    auth_for_whm( $useragent, $username, $password, $accesshash_name );
+    $useragent = auth_for_whm( $username, $password, $accesshash_name );
 }
 elsif ( $api_class =~ $cpanel_api_regex || $api_class =~ $uapi_regex ) {
-    auth_for_cp( $useragent, $username, $password, $accesshash_name );
+    $useragent = auth_for_cp( $username, $password, $accesshash_name );
 }
 else { die "Couldn't make head or tails of the API class.\n"; }
 
@@ -85,8 +85,10 @@ my $url = assemble_url(
 
 if ($debug) { print "    request URL turned out to be $url\n"; }
 
-my $response = $useragent->get($url);
+my $response     = $useragent->get($url);
 my $json_printer = JSON->new->pretty;
+
+# print Dumper($response);
 print $json_printer->encode( decode_json( encode_utf8( $response->{content} ) ) );
 
 ##################################################################################################################
@@ -142,69 +144,81 @@ sub process_parameter {
     }
     else {
         my $value;
-        $value = prompt("$arg: ", -e => '*');
+        $value = prompt( "$arg: ", -e => '*' );
         return "$arg=$value";
     }
 }
 
 ##################################################################################################################
-#### Authorizing our UserAgent
+#### Creating our UserAgent
 ##################################################################################################################
 
-# Expects four arguments:
-#   $useragent       - an LWP::UserAgent object
+# Expects three arguments:
 #   $username        - Defaults to 'root'
 #   $password        - If you're not providing it, leave it false
 #   $accesshash_name - a filename. Defaults to /root/.accesshash
-# Returns 1 for success, or 0 if no authentication method succeeded.
+# Returns an authenticated HTTP::Tiny user agent, or 0.
+# WARNING: That behavior will almost certainly change.
 sub auth_for_whm {
-    my ( $useragent, $username, $password, $accesshash_name ) = @_;
+    my ( $username, $password, $accesshash_name ) = @_;
     if ($debug) { print "entered auth_for_whm\n"; }
-    die "No useragent provided. How did you get here?" unless $useragent;
     $username ||= 'root';
 
-    simple_auth_via_hash( $useragent, $username, $accesshash_name )
-      or simple_auth_via_password( $useragent, $username, $password )
+    my $useragent =
+         simple_auth_via_hash( $username, $accesshash_name )
+      or simple_auth_via_password( $username, $password )
       or die "WHM-style authentication failed.\n";
-    return 1;
+    return $useragent;
 }
 
 sub auth_for_cp {
-    my ( $useragent, $username, $password, $accesshash_name ) = @_;
+    my ( $username, $password, $accesshash_name ) = @_;
     if ($debug) { print "entered auth_for_cp\n"; }
-    die "No useragent provided. How did you get here?" unless $useragent;
-    die "cPanel API calls need a username.\n"          unless $username;
+    die "cPanel API calls need a username.\n" unless $username;
 
-    if ( simple_auth_via_password( $useragent, $username, $password ) ) {
+    my $useragent = simple_auth_via_password( $username, $password );
+    if ($useragent) {
         $security_token = '/';
-        return 1;
+        return $useragent;
     }
     if ($debug) { print "    Attempting cPanel user auth via root access hash.\n"; }
 
     my $accesshash = read_access_hash($accesshash_name);
-    die "cPanel auth via hash failed\n" unless get_security_token( $username, $accesshash );
+    $useragent = get_security_token( $username, $accesshash );
+    if ( !$useragent ) { die 'cPanel auth via hash failed.\n'; }
+    return $useragent;
 }
 
 sub simple_auth_via_hash {
-    my ( $useragent, $username, $accesshash_name ) = @_;
+    my ( $username, $accesshash_name ) = @_;
     if ($debug) { print "entered simple_auth_via_hash\n"; }
     $accesshash_name ||= '/root/.accesshash';
 
     my $accesshash = read_access_hash($accesshash_name);
     return 0 unless $accesshash;
     if ($debug) { print "    Access hash used for authentication.\n"; }
-    $useragent->default_header( 'Authorization' => 'WHM ' . $username . ':' . $accesshash, );
-    return 1;
+    my $useragent = HTTP::Tiny->new(
+        cookie_jar      => HTTP::Cookies->new,
+        default_headers => {
+            'Authorization' => "WHM $username:$accesshash",
+        },
+    );
+    return $useragent;
 }
 
 sub simple_auth_via_password {
-    my ( $useragent, $username, $password ) = @_;
+    my ( $username, $password ) = @_;
     if ($debug) { print "entered simple_auth_via_passwd\n"; }
     if ( !$username || !$password ) { return 0; }
 
     if ($debug) { print "    Password used for authentication.\n"; }
-    $useragent->default_header( 'Authorization' => 'BASIC ' . MIME::Base64::encode( $username . ':' . $password ), );
-    return 1;
+    my $useragent = HTTP::Tiny->new(
+        cookie_jar      => HTTP::Cookies->new,
+        default_headers => {
+            'Authorization' => 'BASIC ' . MIME::Base64::encode( "$username :$password" ),
+        }
+    );
+    return $useragent;
 }
 
 # TODO: Need to make sure the access hash is valid.
@@ -247,32 +261,28 @@ sub get_security_token {
 
     # TODO: Maybe access hash is bad. Gotta deal with that.
     my $localuseragent = HTTP::Tiny->new(
-        cookie_jar            => HTTP::Cookies->new,
+        cookie_jar      => HTTP::Cookies->new,
+        default_headers => {
+            'Authorization' => 'WHM root:' . $accesshash,
+        }
     );
-    $localuseragent->default_header( 'Authorization' => 'WHM root:' . $accesshash, );
 
     my $request         = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
-    my $response        = $localuseragent->post( "http://${hostname}:2086" . $request, );
+    my $response        = $localuseragent->post( "http://${hostname}:2087" . $request, );
     my $decoded_content = decode_json( $response->{content} );
     my $session_url     = $decoded_content->{'data'}->{'url'};
 
-    # LWP will bomb out with a certificate problem if we use HTTPS, so we have to use plain HTTP.
-    $session_url    = force_http($session_url);
     $session_url =~ m{(cpsess[^/]+)};
     $security_token = "$1/";
     if ($debug) { print "    security_token turned out to be $security_token\n"; }
-    $response       = $useragent->get($session_url);
+
+    my $useragent = HTTP::Tiny->new(
+        cookie_jar => HTTP::Cookies->new,
+    );
+    $response = $useragent->get($session_url);
 
     # global $security_token is now populated
-    return 1;
-}
-
-# Accepts a URL in HTTP or HTTPS, and returns it in HTTP.
-sub force_http {
-    my ($url) = @_;
-    $url =~ s/https:/http:/;
-    $url =~ s/:2083/:2082/;
-    return $url;
+    return $useragent;
 }
 
 ##################################################################################################################
@@ -326,7 +336,7 @@ sub assemble_url {
 # return a string if it needs to be in the URL. Empty is correct in some cases.
 sub whatis_port {
     my ($api_class) = @_;
-    return $api_class =~ $whm_api_regex ? 2086 : 2082;
+    return $api_class =~ $whm_api_regex ? 2087 : 2083;
 }
 
 sub is_jsonapi {
