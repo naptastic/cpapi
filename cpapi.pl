@@ -71,7 +71,7 @@ if ( $api_class =~ $whm_api_regex ) {
 elsif ( $api_class =~ $cpanel_api_regex || $api_class =~ $uapi_regex ) {
     $useragent = auth_for_cp( $username, $password, $accesshash_name );
 }
-else { die "Couldn't make head or tails of the API class.\n"; }
+else { print "Couldn't make head or tails of the API class.\n\n"; help(); }
 
 my $url = assemble_url(
     'protocol'       => $protocol,
@@ -410,8 +410,6 @@ OPTIONS:
                 WARNING: Debug output has the potential to disclose
                 sensitive information you put in your call.
 
-    -u, -ugly           "Ugly" output--JSON will not be pretty-printed.
-
 AUTHENTICATION:
     For WHM calls, cpapi will try to use your access hash first. If you pass
     -p, it will prompt for your password, but still use your access hash if it
@@ -452,9 +450,6 @@ EXAMPLES:
     cpapi API2::MysqlFE::createdb db=david_site1
 
 KNOWN PROBLEMS:
-    cPanel API1 calls all return "Could not find function _ in module _".
-    I don't know what's up with that.
-
     User / Password authentication doesn't work for cPanel API1 / API2. A
     security token is required and the security token code isn't that smart
     yet.
