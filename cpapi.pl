@@ -16,6 +16,7 @@ use Data::Dumper;
 use Encode qw( encode_utf8 );
 use MIME::Base64;
 use utf8;
+use Cpanel::CPAN::URI::Escape ();
 
 # Presented output should be presentable.
 use JSON;
@@ -85,7 +86,7 @@ my $url = assemble_url(
 
 if ($debug) { print "    request URL turned out to be $url\n"; }
 
-my $response     = $useragent->get($url);
+my $response     = $useragent->post($url);
 my $json_printer = JSON->new->pretty;
 
 # print Dumper($response);
@@ -134,8 +135,8 @@ sub process_call_name {
 sub process_parameter {
     my ($arg) = @_;
     if ($debug) { print "entered process_parameter\n"; }
-    if ( $arg =~ /^[^=]+=[^=]*$/ ) {
-        return $arg;
+    if ( $arg =~ /^([^=]+)=(.*)$/d ) {
+        return "$1=" . Cpanel::CPAN::URI::Escape::fast_uri_escape($2);
     }
     elsif ( $arg =~ /^=/ ) {
 
@@ -143,6 +144,7 @@ sub process_parameter {
         die "A parameter has no name. Did you misplace a space?\n";
     }
     else {
+        local @ARGV;
         my $value;
         $value = prompt( "$arg: ", -e => '*' );
         return "$arg=$value";
