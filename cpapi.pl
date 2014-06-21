@@ -152,7 +152,7 @@ sub process_call_name {
 sub process_parameter {
     my ($arg) = @_;
     if ($debug) { print "entered process_parameter\n"; }
-    if ( $arg =~ /^([^=]+)=(.*)$/d ) {
+    if ( $arg =~ /^([^=]+)=(.*)$/ ) {
         return "$1=" . URI::Escape::uri_escape($2);
     }
     elsif ( $arg =~ /^=/ ) {
