@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/local/cpanel/3rdparty/bin/perl
 # cpanel - cpapi.pl             Copyright(c) 2014 cPanel, Inc.
 #                                                           All rights Reserved.
 # copyright@cpanel.net                                         http://cpanel.net
