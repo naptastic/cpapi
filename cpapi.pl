@@ -5,7 +5,6 @@
 # This code is subject to the cPanel license. Unauthorized copying is prohibited
 use strict;
 
-#use LWP::UserAgent;
 use HTTP::Tiny;
 
 # Because having a certificate installed on 'localhost' is kinda dumb,
@@ -282,8 +281,8 @@ sub get_security_token {
         default_headers => { 'Authorization' => 'WHM root:' . $accesshash, },
     );
 
-    my $request  = "/json-api/create_user_session?api.version=1&user=${cpanel_username}&service=cpaneld";
-    my $response = $localuseragent->post( "${protocol}://${hostname}:2087" . $request, );
+    my $request  = "/json-api/create_user_session?api.version=1&user=$cpanel_username&service=cpaneld";
+    my $response = $localuseragent->post( "$protocol://$hostname:2087$request", );
     my $decoded_content;
 
     # Currently pointless exception handling.
