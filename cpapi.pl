@@ -364,7 +364,7 @@ sub assemble_url {
 # return a string if it needs to be in the URL. Empty is correct in some cases.
 sub whatis_port {
     my ( $api_class, $protocol ) = @_;
-    if ( $protocol = 'https' ) {
+    if ( $protocol eq 'https' ) {
         return $api_class =~ $whm_api_regex ? 2087 : 2083;
     }
     else {
