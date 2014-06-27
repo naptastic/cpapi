@@ -5,22 +5,18 @@
 # This code is subject to the cPanel license. Unauthorized copying is prohibited
 use strict;
 
-use HTTP::Tiny;
-
-# Because having a certificate installed on 'localhost' is kinda dumb,
-# I'm not wasting time with HTTPS.
-use HTTP::Cookies;
-use IO::Prompt;
-use Data::Dumper;
+use Getopt::Long  ();
+use HTTP::Tiny    ();
+use HTTP::Cookies ();
+use MIME::Base64  ();
+use Data::Dumper  ();
+use URI::Escape   ();
+use IO::Prompt    ();
 use Encode qw( encode_utf8 );
-use MIME::Base64;
+use JSON;
 use utf8;
-use URI::Escape ();
 
 # Presented output should be presentable.
-use JSON;
-
-use Getopt::Long;
 
 # TODO: Most or all of these globals should go away.
 my $username;
@@ -45,7 +41,7 @@ my $uapi_regex       = qr/^uapi$/i;
 my $whm_api_regex    = qr/^whm[01]$/i;
 my $cpanel_api_regex = qr/^api[12]$/i;
 
-GetOptions(
+Getopt::Long::GetOptions(
     'username|u=s' => \$username,
     'password|p'   => sub {
         local @ARGV = ();
@@ -313,8 +309,8 @@ sub get_security_token {
 ##################################################################################################################
 
 # Expects a hash of arguments. {
-#   'protocol'       => defaults to http (and really shouldn't be changed right now)
-#   'hostname'       => defaults to localhost (ditto)
+#   'protocol'       => defaults to http
+#   'hostname'       => defaults to localhost
 #   'api_class'      => one of uapi, api1, api2, whm0, or whm1
 #   'security_token' => /cpsessXXXXXXXXXX/ or '' or undef
 #   'module'         => the module within which the function you want resides
