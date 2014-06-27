@@ -313,8 +313,8 @@ sub get_security_token {
 ##################################################################################################################
 
 # Expects a hash of arguments. {
-#   'protocol'       => defaults to http (and really shouldn't be changed right now)
-#   'hostname'       => defaults to localhost (ditto)
+#   'protocol'       => defaults to https
+#   'hostname'       => defaults to localhost
 #   'api_class'      => one of uapi, api1, api2, whm0, or whm1
 #   'security_token' => /cpsessXXXXXXXXXX/ or '' or undef
 #   'module'         => the module within which the function you want resides
