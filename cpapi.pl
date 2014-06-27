@@ -42,17 +42,18 @@ my $whm_api_regex    = qr/^whm[01]$/i;
 my $cpanel_api_regex = qr/^api[12]$/i;
 
 Getopt::Long::GetOptions(
-    'username|u=s' => \$username,
-    'password|p'   => sub {
+    'accesshash|a=s' => \$accesshash_name,
+    'debug|d'        => \$debug,
+    'help|h'         => \&help,
+    'hostname|H=s'   => \$hostname,
+    'insecure'       => sub { $protocol = 'http' },
+    'username|u=s'   => \$username,
+    'password|p'     => sub {
         local @ARGV = ();
         $password = prompt( "Password: ", -e => "*" );
         return 1;
     },
-    'help|h'         => \&help,
-    'hostname|H=s'   => \$hostname,
-    'debug|d'        => \$debug,
-    'accesshash|a=s' => \$accesshash_name,
-    '<>'             => \&process_non_option,
+    '<>' => \&process_non_option,
 );
 
 my $useragent;
@@ -94,8 +95,16 @@ my $json_printer = JSON->new->pretty;
 
         # $content probably contains HTML due to a cPanel-provided error.
         # TODO: Break this out by HTTP status codes. That'll be cool.
-        print "The call seems to have failed. Here are the HTTP status code and reason given:\n";
-        print "$response->{status}: $response->{reason}\n";
+        if ($response->{'status'} = 301) {
+            print "cPanel attempted to redirect to:\n";
+            print Data::Dumper::Dumper($response);
+            print $response->{'headers'}->{'location'};
+            print "\nIs 'always redirect to SSL' turned on in Tweak Settings?\n";
+        }
+        else {
+            print "The call seems to have failed. Here are the HTTP status code and reason given:\n";
+            print "$response->{status}: $response->{reason}\n";
+        }
         exit;
     }
     else {
@@ -330,7 +339,7 @@ sub assemble_url {
     my %parts = (
         'protocol'              => $args{'protocol'},
         'hostname'              => $args{'hostname'},
-        'port'                  => whatis_port( $args{'api_class'} ),
+        'port'                  => whatis_port( $args{'api_class'}, $args{'protocol'} ),
         'json-api'              => is_jsonapi( $args{'api_class'} ),
         'security_token'        => $args{'security_token'},
         'execute'               => is_execute( $args{'api_class'} ),
@@ -354,8 +363,13 @@ sub assemble_url {
 # These subroutines take the API class ( whm0, whm1, api1, api2, uapi ) and
 # return a string if it needs to be in the URL. Empty is correct in some cases.
 sub whatis_port {
-    my ($api_class) = @_;
-    return $api_class =~ $whm_api_regex ? 2087 : 2083;
+    my ( $api_class, $protocol ) = @_;
+    if ( $protocol = 'https' ) {
+        return $api_class =~ $whm_api_regex ? 2087 : 2083;
+    }
+    else {
+        return $api_class =~ $whm_api_regex ? 2086 : 2082;
+    }
 }
 
 sub is_jsonapi {
