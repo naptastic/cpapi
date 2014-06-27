@@ -28,3 +28,12 @@ sub add {
 # Could this call itself die?
     return $url->do_the_thing();
 }
+
+sub remove {
+}
+
+sub list {
+}
+
+sub set_password {
+}
