@@ -24,13 +24,13 @@ my $cpanel_api_regex = qr/^api[12]$/i;
 sub new {
     my ( $class, $args ) = @_;
     my $self = {
-        'hostname'       => $args{'hostname'},
-        'username'       => $args{'username'},
-        'password'       => $args{'password'},
         'accesshash'     => $args{'accesshash'},
-        'protocol'       => 'https',
+        'hostname'       => $args{'hostname'} || 'localhost',
+        'password'       => $args{'password'} || 'whostmgrd',
+        'protocol'       => $args{'protocol'} || 'https',
         'security_token' => '/',
         'useragent'      => _make_useragent($args),
+        'username'       => $args{'username'} || 'root',
     };
     return bless $self, $class;
 }
