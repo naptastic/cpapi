@@ -4,6 +4,7 @@
 # copyright@cpanel.net                                         http://cpanel.net
 # This code is subject to the cPanel license. Unauthorized copying is prohibited
 use strict;
+use warnings;
 
 use Data::Dumper         ();
 use Data::Dumper         ();
@@ -99,7 +100,7 @@ my $json_printer = JSON->new->pretty;
 
         # $content probably contains HTML due to a cPanel-provided error.
         # TODO: Break this out by HTTP status codes. That'll be cool.
-        if ( $response->{'status'} = 301 ) {
+        if ( $response->{'status'} == 301 ) {
             print "cPanel attempted to redirect to:\n";
             print Data::Dumper::Dumper($response);
             print "\nIs 'always redirect to SSL' turned on in Tweak Settings?\n";
