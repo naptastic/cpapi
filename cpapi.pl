@@ -332,7 +332,7 @@ sub get_security_token {
 ##################################################################################################################
 
 # Expects a hash of arguments. {
-#   'protocol'       => defaults to https
+#   'protocol'       => defaults to http
 #   'hostname'       => defaults to localhost
 #   'api_class'      => one of uapi, api1, api2, whm0, or whm1
 #   'security_token' => /cpsessXXXXXXXXXX/ or '' or undef
