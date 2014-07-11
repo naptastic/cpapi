@@ -351,18 +351,18 @@ sub assemble_url {
     }
 
     my %parts = (
-        'protocol'              => $args{'protocol'},
-        'hostname'              => $args{'hostname'},
+        'protocol'              => $args{'protocol'} || q{},
+        'hostname'              => $args{'hostname'} || q{},
         'port'                  => whatis_port( $args{'api_class'}, $args{'protocol'} ),
         'json-api'              => is_jsonapi( $args{'api_class'} ),
-        'security_token'        => $args{'security_token'},
+        'security_token'        => $args{'security_token'} || q{},
         'execute'               => is_execute( $args{'api_class'} ),
         'cpanel'                => is_cpanel( $args{'api_class'} ),
         'user'                  => get_cpanel_userarg( $args{'api_class'}, $args{'username'} ),
         'cpanel_jsonapi_module' => is_cpanel_jsonapi_module( $args{'api_class'} ),
-        'module'                => $args{'module'},
+        'module'                => $args{'module'} || q{},
         'cpanel_jsonapi_func'   => is_cpanel_jsonapi_func( $args{'api_class'} ),
-        'function'              => $args{'function'},
+        'function'              => $args{'function'} || q{},
         'api_version'           => api_version( $args{'api_class'} ),
     );
 
