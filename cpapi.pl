@@ -31,7 +31,6 @@ my $password;
 my $accesshash_name = '/root/.accesshash';
 my $debug;
 
-my $call_name;
 my @call_params;
 
 my $api_class;
@@ -42,9 +41,9 @@ my $function;
 # like David Tennant telling you that you've got two shadows sorry.
 my $security_token;
 
-my $uapi_regex       = qr/^uapi$/i;
-my $whm_api_regex    = qr/^whm[01]$/i;
-my $cpanel_api_regex = qr/^api[12]$/i;
+my $uapi_regex       = qr{\Auapi\z}sxmi;
+my $whm_api_regex    = qr{\Awhm[01]\z}sxmi;
+my $cpanel_api_regex = qr{\A^api[12]\z}sxmi;
 
 Getopt::Long::GetOptions(
     'accesshash|a=s' => \$accesshash_name,
@@ -55,7 +54,7 @@ Getopt::Long::GetOptions(
     'username|u=s'   => \$username,
     'password|p'     => sub {
         local @ARGV = ();
-        $password = prompt( "Password: ", -e => "*" );
+        $password = prompt( 'Password: ', -e => '*' );
         return 1;
     },
     '<>' => \&process_non_option,
@@ -94,8 +93,8 @@ my $json_printer = JSON->new->pretty;
 
 # Deliver report, plus Perlesque exception handling.
 {
-    local $@;
-    eval { $content = JSON::decode_json($content) };
+    local $@ = undef;
+    $content = eval { JSON::decode_json($content) };
     if ($@) {
 
         # $content probably contains HTML due to a cPanel-provided error.
@@ -125,7 +124,7 @@ my $json_printer = JSON->new->pretty;
 sub process_non_option {
     my ( $opt_name, $opt_value ) = @_;
     if ($debug) { print "entered process_non_option\n"; }
-    if ( $opt_name =~ /::/ ) {
+    if ( $opt_name =~ /::/sxm ) {
         ( $api_class, $module, $function ) = process_call_name($opt_name);
     }
     else {
@@ -145,7 +144,7 @@ sub process_call_name {
     if ( $call_parts[0] =~ $uapi_regex ) {
         $api_class = shift @call_parts;
         $function  = pop @call_parts;
-        $module    = join( '/', @call_parts, '' );
+        $module    = join( '/', @call_parts, q{} );
     }
     elsif ( $call_parts[0] =~ $whm_api_regex || $call_parts[0] =~ $cpanel_api_regex ) {
         ( $api_class, $module, $function ) = @call_parts;
@@ -159,13 +158,13 @@ sub process_call_name {
 sub process_parameter {
     my ($arg) = @_;
     if ($debug) { print "entered process_parameter\n"; }
-    if ( $arg =~ /^([^=]+)=(.*)$/ ) {
+    if ( $arg =~ /^([^=]+)=(.*)$/sxm ) {
         return "$1=" . URI::Escape::uri_escape($2);
     }
-    elsif ( $arg =~ /^=/ ) {
+    elsif ( $arg =~ /\A=/sxm ) {
 
         # We were passed something like '=foo' which is meaningless.
-        die "A parameter has no name. Did you misplace a space?\n";
+        die 'A parameter has no name. Did you misplace a space?';
     }
     else {
         local @ARGV;
@@ -193,14 +192,14 @@ sub auth_for_whm {
     my $useragent =
          simple_auth_via_hash( $username, $accesshash_name )
       or simple_auth_via_password( $username, $password )
-      or die "WHM-style authentication failed.\n";
+      or die 'WHM-style authentication failed.';
     return $useragent;
 }
 
 sub auth_for_cp {
     my ( $username, $password, $accesshash_name ) = @_;
     if ($debug) { print "entered auth_for_cp\n"; }
-    die "cPanel API calls need a username.\n" unless $username;
+    die 'cPanel API calls need a username.' unless $username;
 
     my $useragent = simple_auth_via_password( $username, $password );
     if ($useragent) {
@@ -211,7 +210,7 @@ sub auth_for_cp {
 
     my $accesshash = read_access_hash($accesshash_name);
     $useragent = get_security_token( $username, $accesshash );
-    if ( !$useragent ) { die 'cPanel auth via hash failed.\n'; }
+    if ( !$useragent ) { die 'cPanel auth via hash failed.'; }
     return $useragent;
 }
 
@@ -299,8 +298,8 @@ sub get_security_token {
     # Currently pointless exception handling.
     # At some point there may be conditions I want to catch.
     {
-        local $@;
-        eval { $decoded_content = JSON::decode_json($decoded_content); };
+        local $@ = undef;
+        $decoded_content = eval { JSON::decode_json($decoded_content); };
         if ($@) {
             if ($debug) {
                 print "    decode_json inside get_security_token died. Here's the JSON:\n";
@@ -311,7 +310,7 @@ sub get_security_token {
     }
     my $session_url = $decoded_content->{'data'}->{'url'};
 
-    $session_url =~ m{(cpsess[^/]+)};
+    $session_url =~ m{(cpsess[^/]+)}sxm;
     $security_token = "$1/";
     if ($debug) {
         print "    session_url turned out to be $session_url\n";
@@ -369,7 +368,7 @@ sub assemble_url {
 
     my $url;
     $url = "$parts{'protocol'}://$parts{'hostname'}:$parts{'port'}/";
-    $url .= join '',  @parts{qw/ security_token json-api execute cpanel user cpanel_jsonapi_module module cpanel_jsonapi_func function api_version /};
+    $url .= join q{},  @parts{qw/ security_token json-api execute cpanel user cpanel_jsonapi_module module cpanel_jsonapi_func function api_version /};
     $url .= join '&', @{ $args{'params_ref'} };
 
     return $url;
@@ -389,32 +388,32 @@ sub whatis_port {
 
 sub is_jsonapi {
     my ($api_class) = @_;
-    return $api_class =~ $uapi_regex ? '' : 'json-api/';
+    return $api_class =~ $uapi_regex ? q{} : 'json-api/';
 }
 
 sub is_execute {
     my ($api_class) = @_;
-    return $api_class =~ $uapi_regex ? 'execute/' : '';
+    return $api_class =~ $uapi_regex ? 'execute/' : q{};
 }
 
 sub is_cpanel {
     my ($api_class) = @_;
-    return $api_class =~ $cpanel_api_regex ? 'cpanel?' : '';
+    return $api_class =~ $cpanel_api_regex ? 'cpanel?' : q{};
 }
 
 sub get_cpanel_userarg {
     my ( $api_class, $username ) = @_;
-    return $api_class =~ $cpanel_api_regex ? "user=$username" : '';
+    return $api_class =~ $cpanel_api_regex ? "user=$username" : q{};
 }
 
 sub is_cpanel_jsonapi_module {
     my ($api_class) = @_;
-    return $api_class =~ $cpanel_api_regex ? '&cpanel_jsonapi_module=' : '';
+    return $api_class =~ $cpanel_api_regex ? '&cpanel_jsonapi_module=' : q{};
 }
 
 sub is_cpanel_jsonapi_func {
     my ($api_class) = @_;
-    return $api_class =~ $cpanel_api_regex ? '&cpanel_jsonapi_func=' : '';
+    return $api_class =~ $cpanel_api_regex ? '&cpanel_jsonapi_func=' : q{};
 }
 
 sub api_version {
@@ -432,7 +431,7 @@ sub api_version {
 
 sub help {
 
-    my $help = <<END;
+    my $help = <<'END';
 USAGE:
     cpapi [options] API::Module::function argument=value
 
