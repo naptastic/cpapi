@@ -5,16 +5,20 @@
 # This code is subject to the cPanel license. Unauthorized copying is prohibited
 use strict;
 
-use Getopt::Long  ();
-use HTTP::Tiny    ();
-use HTTP::Cookies ();
-use MIME::Base64  ();
-use Data::Dumper  ();
-use URI::Escape   ();
-use IO::Prompt    ();
-use Encode qw( encode_utf8 );
-use JSON;
+use Data::Dumper         ();
+use Data::Dumper         ();
+use Encode               ();
+use Getopt::Long         ();
+use HTTP::Cookies        ();
+use IO::Prompt           ();
+use JSON                 ();
+use LWP::Protocol::https ();
+use LWP::UserAgent       ();
+use MIME::Base64         ();
+use URI::Escape          ();
 use utf8;
+
+$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 0;
 
 # Presented output should be presentable.
 
@@ -84,26 +88,24 @@ my $url = assemble_url(
 if ($debug) { print "    request URL turned out to be $url\n"; }
 
 my $response     = $useragent->post($url);
-my $content      = encode_utf8( $response->{content} );
+my $content      = Encode::encode_utf8( $response->decoded_content );
 my $json_printer = JSON->new->pretty;
 
 # Deliver report, plus Perlesque exception handling.
 {
     local $@;
-    eval { $content = decode_json($content) };
+    eval { $content = JSON::decode_json($content) };
     if ($@) {
 
         # $content probably contains HTML due to a cPanel-provided error.
         # TODO: Break this out by HTTP status codes. That'll be cool.
-        if ($response->{'status'} = 301) {
+        if ( $response->{'status'} = 301 ) {
             print "cPanel attempted to redirect to:\n";
             print Data::Dumper::Dumper($response);
-            print $response->{'headers'}->{'location'};
             print "\nIs 'always redirect to SSL' turned on in Tweak Settings?\n";
         }
         else {
-            print "The call seems to have failed. Here are the HTTP status code and reason given:\n";
-            print "$response->{status}: $response->{reason}\n";
+            print "decode_json died. Here's what it was passed:\n$content\n";
         }
         exit;
     }
@@ -180,7 +182,7 @@ sub process_parameter {
 #   $username        - Defaults to 'root'
 #   $password        - If you're not providing it, leave it false
 #   $accesshash_name - a filename. Defaults to /root/.accesshash
-# Returns an authenticated HTTP::Tiny user agent, or 0.
+# Returns an authenticated LWP user agent, or 0.
 # WARNING: That behavior will almost certainly change.
 sub auth_for_whm {
     my ( $username, $password, $accesshash_name ) = @_;
@@ -220,10 +222,11 @@ sub simple_auth_via_hash {
     my $accesshash = read_access_hash($accesshash_name);
     return 0 unless $accesshash;
     if ($debug) { print "    Access hash used for authentication.\n"; }
-    my $useragent = HTTP::Tiny->new(
-        cookie_jar      => HTTP::Cookies->new,
-        default_headers => { 'Authorization' => "WHM $username:$accesshash", },
+    my $useragent = LWP::UserAgent->new(
+        cookie_jar => HTTP::Cookies->new,
+        ssl_opts   => { verify_hostname => 0, SSL_verify_mode => 0x00 },
     );
+    $useragent->default_header( 'Authorization' => "WHM $username:$accesshash" );
     return $useragent;
 }
 
@@ -233,10 +236,11 @@ sub simple_auth_via_password {
     if ( !$username || !$password ) { return 0; }
 
     if ($debug) { print "    Password used for authentication.\n"; }
-    my $useragent = HTTP::Tiny->new(
-        cookie_jar      => HTTP::Cookies->new,
-        default_headers => { 'Authorization' => 'BASIC ' . MIME::Base64::encode("$username:$password"), }
+    my $useragent = LWP::UserAgent->new(
+        cookie_jar => HTTP::Cookies->new,
+        ssl_opts   => { verify_hostname => 0, SSL_verify_mode => 0x00 },
     );
+    $useragent->default_header( 'Authorization' => 'BASIC ' . MIME::Base64::encode("$username:$password") );
     return $useragent;
 }
 
@@ -281,22 +285,26 @@ sub get_security_token {
     return 0 unless $accesshash;
 
     # TODO: Maybe access hash is bad. Gotta deal with that.
-    my $localuseragent = HTTP::Tiny->new(
-        cookie_jar      => HTTP::Cookies->new,
-        default_headers => { 'Authorization' => 'WHM root:' . $accesshash, },
+    my $localuseragent = LWP::UserAgent->new(
+        cookie_jar => HTTP::Cookies->new,
+        ssl_opts   => { verify_hostname => 0, SSL_verify_mode => 0x00 },
     );
+    $localuseragent->default_header( 'Authorization' => "WHM root:$accesshash" );
 
-    my $request  = "/json-api/create_user_session?api.version=1&user=$cpanel_username&service=cpaneld";
-    my $response = $localuseragent->post( "$protocol://$hostname:2087$request", );
-    my $decoded_content;
+    my $request         = "/json-api/create_user_session?api.version=1&user=$cpanel_username&service=cpaneld";
+    my $response        = $localuseragent->get( "$protocol://$hostname:2087$request", );
+    my $decoded_content = $response->decoded_content;
 
     # Currently pointless exception handling.
     # At some point there may be conditions I want to catch.
     {
         local $@;
-        eval { $decoded_content = decode_json( $response->{content} ); };
+        eval { $decoded_content = JSON::decode_json($decoded_content); };
         if ($@) {
-            print Dumper($response);
+            if ($debug) {
+                print "    decode_json inside get_security_token died. Here's the JSON:\n";
+                print "    $decoded_content\n";
+            }
             return 0;
         }
     }
@@ -304,9 +312,15 @@ sub get_security_token {
 
     $session_url =~ m{(cpsess[^/]+)};
     $security_token = "$1/";
-    if ($debug) { print "    security_token turned out to be $security_token\n"; }
+    if ($debug) {
+        print "    session_url turned out to be $session_url\n";
+        print "    security_token turned out to be $security_token\n";
+    }
 
-    my $useragent = HTTP::Tiny->new( cookie_jar => HTTP::Cookies->new, );
+    my $useragent = LWP::UserAgent->new(
+        cookie_jar => HTTP::Cookies->new,
+        ssl_opts   => { verify_hostname => 0, SSL_verify_mode => 0x00 },
+    );
     $response = $useragent->get($session_url);
 
     # global $security_token is now populated
