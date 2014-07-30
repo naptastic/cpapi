@@ -89,7 +89,7 @@ if ($debug) { print "    request URL turned out to be $url\n"; }
 
 my $response     = $useragent->post($url);
 my $content      = Encode::encode_utf8( $response->decoded_content );
-my $json_printer = JSON->new->pretty;
+my $json_printer = JSON->new->pretty->canonical(1);
 
 # Deliver report, plus Perlesque exception handling.
 {
