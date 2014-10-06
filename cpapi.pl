@@ -88,7 +88,7 @@ my $url = assemble_url(
 if ($debug) { print "    request URL turned out to be $url\n"; }
 
 my $response     = $useragent->post($url);
-my $content      = Encode::encode_utf8( $response->decoded_content );
+my $content      = $response->decoded_content;
 my $json_printer = JSON->new->pretty->canonical(1);
 
 # Deliver report, plus Perlesque exception handling.
@@ -111,7 +111,7 @@ my $json_printer = JSON->new->pretty->canonical(1);
     }
     else {
         # Success!
-        print $json_printer->encode($content);
+        print Encode::encode_utf8( $json_printer->encode($content) );
     }
 }
 
@@ -351,24 +351,24 @@ sub assemble_url {
     }
 
     my %parts = (
-        'protocol'              => $args{'protocol'} || q{},
-        'hostname'              => $args{'hostname'} || q{},
-        'port'                  => whatis_port( $args{'api_class'}, $args{'protocol'} ),
-        'json-api'              => is_jsonapi( $args{'api_class'} ),
-        'security_token'        => $args{'security_token'} || q{},
-        'execute'               => is_execute( $args{'api_class'} ),
-        'cpanel'                => is_cpanel( $args{'api_class'} ),
+        'protocol' => $args{'protocol'} || q{},
+        'hostname' => $args{'hostname'} || q{},
+        'port'     => whatis_port( $args{'api_class'}, $args{'protocol'} ),
+        'json-api' => is_jsonapi( $args{'api_class'} ),
+        'security_token' => $args{'security_token'} || q{},
+        'execute'        => is_execute( $args{'api_class'} ),
+        'cpanel'         => is_cpanel( $args{'api_class'} ),
         'user'                  => get_cpanel_userarg( $args{'api_class'}, $args{'username'} ),
         'cpanel_jsonapi_module' => is_cpanel_jsonapi_module( $args{'api_class'} ),
-        'module'                => $args{'module'} || q{},
-        'cpanel_jsonapi_func'   => is_cpanel_jsonapi_func( $args{'api_class'} ),
-        'function'              => $args{'function'} || q{},
-        'api_version'           => api_version( $args{'api_class'} ),
+        'module' => $args{'module'} || q{},
+        'cpanel_jsonapi_func' => is_cpanel_jsonapi_func( $args{'api_class'} ),
+        'function'            => $args{'function'} || q{},
+        'api_version'         => api_version( $args{'api_class'} ),
     );
 
     my $url;
     $url = "$parts{'protocol'}://$parts{'hostname'}:$parts{'port'}/";
-    $url .= join q{},  @parts{qw/ security_token json-api execute cpanel user cpanel_jsonapi_module module cpanel_jsonapi_func function api_version /};
+    $url .= join q{}, @parts{qw/ security_token json-api execute cpanel user cpanel_jsonapi_module module cpanel_jsonapi_func function api_version /};
     $url .= join '&', @{ $args{'params_ref'} };
 
     return $url;
