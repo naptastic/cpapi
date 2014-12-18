@@ -25,7 +25,7 @@ $ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 0;
 
 # TODO: Most or all of these globals should go away.
 my $username;
-my $hostname = 'localhost';
+my $hostname = '127.0.0.1';
 my $protocol = 'https';
 my $password;
 my $accesshash_name = '/root/.accesshash';
